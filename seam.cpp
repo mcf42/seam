@@ -1,5 +1,5 @@
 //seam.cpp
-//michael fiander
+//michaet fiander
 
 #include <string>
 #include <iostream>
@@ -7,46 +7,53 @@
 #include <cmath>
 #include <cstring>
 #include <vector>
+#include <sstream>
+#include <stdlib.h>
 
 int find_smallest(int, int);
 int find_smallest(int, int, int);
-void trace_seam(int, int, std::vector<int>&, std::vector<std::vector<int> >&);
+void trace_seam(int, int, int, std::vector<int>&, std::vector<std::vector<int> >&, std::vector<std::vector<int> >&);
 void remove_seam(int&, int&, std::vector<std::vector<int> >&);
 
 int main(int argc, char* argv[]) {
 
-	if(argc < 3) {
+	if(argc < 4) {
 		std::cout << "You have provided too few arguements. Terminating program.\n";
 		return 0;
 	}
 
-	std::string filename = argv[0];
-	int x_seams = *argv[1];
-	int y_seams = *argv[2];
+	std::string filename = argv[1];
+	int x_seams = atoi(argv[2]);
+	int y_seams = atoi(argv[3]);
 
-	std::ifstream infile;
-	infile.open(filename.c_str());
+	std::ifstream infile(filename.c_str());
+
 	if (infile.fail()) {
 		std::cout << filename << " does not exist. Terminating program.\n";
 		return 0;
 	}
 
 	std::string P2;
+	std::string comment;
+	std::string sizes;
 	int x_size;
 	int y_size;
 	int max_grey;
 
-	infile >> P2;
-	infile >> x_size;
-	infile >> y_size;
-	infile >> max_grey;
+	std::getline(infile, P2);
+	std::getline(infile, comment);
+	std::stringstream ss;
+	ss << infile.rdbuf();
+	ss >> x_size;
+	ss >> y_size;
+	ss >> max_grey;
 
 	std::vector<std::vector<int> > img_grid;
 	img_grid.resize(x_size, std::vector<int>(y_size, 0));
 
 	for (int y = 0; y < y_size; y++) {		// fill image grid from file
 		for (int x = 0; x < x_size; x++) {
-			infile >> img_grid[x][y];
+			ss >> img_grid[x][y];
 		}
 	}
 
@@ -59,12 +66,13 @@ int main(int argc, char* argv[]) {
 
 	// transpose image
 	std::vector<std::vector<int> > new_img;
-	img_grid.resize(x_size, std::vector<int>(y_size, 0));
+	new_img.resize(y_size, std::vector<int>(x_size, 0));
 	for (int y = 0; y < y_size; y++) {
 		for (int x = 0; x < x_size; x++) {
-			new_img[x][y] = img_grid[x][y];
+			new_img[y][x] = img_grid[x][y];
 		}
 	}
+
 	int new_x_size = y_size;
 	int new_y_size = x_size;
 
@@ -76,9 +84,12 @@ int main(int argc, char* argv[]) {
 	// transpose image
 	for (int y = 0; y < new_y_size; y++) {
 		for (int x = 0; x < new_x_size; x++) {
-			img_grid[x][y] = new_img[x][y];
+			img_grid[y][x] = new_img[x][y];
 		}
 	}
+
+	x_size = new_y_size;
+	y_size = new_x_size;
 
 	// write to new file
 	std::string new_filename = filename.substr(0, filename.size() - 4) + "_processed.pgm";
@@ -90,7 +101,7 @@ int main(int argc, char* argv[]) {
 	outfile << x_size << " " << y_size << "\n";
 	outfile << max_grey << "\n";
 	for(int y = 0; y < y_size; y++) {
-		for(int x = 0; x < x_size - 1; x++) {
+		for(int x = 0; x < x_size; x++) {
 			outfile << img_grid[x][y];
 			if(x < x_size-1) {
 				outfile << " ";
@@ -98,6 +109,7 @@ int main(int argc, char* argv[]) {
 		}
 		outfile << "\n";
 	}
+
 	return 0;
 }
 
@@ -125,16 +137,38 @@ int find_smallest(int a, int b, int c) {
 }
 
 //trace the seam
-void trace_seam(int x, int y, std::vector<int> &seam, std::vector<std::vector<int> > &grid) {
-	seam[y] = x;
-	if(grid[x][y] == grid[x-1][y-1]) {		// upper left neighbor
-		trace_seam(x-1, y-1, seam, grid);
+void trace_seam(int x, int y, int x_size, std::vector<int> &seam, std::vector<std::vector<int> >& grid, std::vector<std::vector<int> >& energy_table) {
+	seam.push_back(x);
+	if(y < 0) {
+		return;
 	}
-	else if(grid[x][y] == grid[x][y-1]) {	// upper neighbor
-		trace_seam(x, y-1, seam, grid);
+
+	if(x == 0) {
+		if(grid[x][y] == grid[x][y-1] + energy_table[x][y]) {
+			trace_seam(x, y-1, x_size, seam, grid, energy_table);
+		}
+		else {
+			trace_seam(x+1, y-1, x_size, seam, grid, energy_table);
+		}
 	}
-	else {									// upper right neighbor
-		trace_seam(x+1, y-1, seam, grid);
+	else if(x == x_size-1) {
+		if(grid[x][y] == grid[x-1][y-1] + energy_table[x][y]) {
+			trace_seam(x-1, y-1, x_size, seam, grid, energy_table);
+		}
+		else {
+			trace_seam(x, y-1, x_size, seam, grid, energy_table);
+		}
+	}
+	else {
+		if(grid[x][y] == grid[x-1][y-1] + energy_table[x][y]) {
+			trace_seam(x-1, y-1, x_size, seam, grid, energy_table);
+		}
+		else if(grid[x][y] == grid[x][y-1] + energy_table[x][y]) {
+			trace_seam(x, y-1, x_size, seam, grid, energy_table);
+		}
+		else {
+			trace_seam(x+1, y-1, x_size, seam, grid, energy_table);
+		}
 	}
 }
 
@@ -150,7 +184,7 @@ void remove_seam(int& x_size, int& y_size, std::vector<std::vector<int> >& img_g
 			if (x == 0) {						// no left
 				if (y == 0) {					// no up
 					energy_table[x][y] = std::abs(img_grid[x][y] - img_grid[x+1][y])
-						+ std::abs(img_grid[x][y] - img_grid[x][y-1]);
+						+ std::abs(img_grid[x][y] - img_grid[x][y+1]);
 				}
 				else if (y == y_size - 1) {		// no down
 					energy_table[x][y] = std::abs(img_grid[x][y] - img_grid[x+1][y])
@@ -165,7 +199,7 @@ void remove_seam(int& x_size, int& y_size, std::vector<std::vector<int> >& img_g
 			else if (x == x_size - 1) {			// no right
 				if (y == 0) {					// no up
 					energy_table[x][y] = std::abs(img_grid[x][y] - img_grid[x-1][y])
-						+ std::abs(img_grid[x][y] - img_grid[x][y-1]);
+						+ std::abs(img_grid[x][y] - img_grid[x][y+1]);
 				}
 				else if (y == y_size - 1) {		// no down
 					energy_table[x][y] = std::abs(img_grid[x][y] - img_grid[x-1][y])
@@ -192,7 +226,7 @@ void remove_seam(int& x_size, int& y_size, std::vector<std::vector<int> >& img_g
 					energy_table[x][y] = std::abs(img_grid[x][y] - img_grid[x+1][y])
 						+ std::abs(img_grid[x][y] - img_grid[x][y+1])
 						+ std::abs(img_grid[x][y] - img_grid[x][y-1])
-						+ std::abs(img_grid[x][y] - img_grid[x][y+1]);
+						+ std::abs(img_grid[x][y] - img_grid[x-1][y]);
 				}
 			}
 		}
@@ -221,7 +255,8 @@ void remove_seam(int& x_size, int& y_size, std::vector<std::vector<int> >& img_g
 
 	// find smallest value in bottom row
 	int starting_position = 0;
-	int starting_value = energy_table[0][y_size - 1];
+
+	int starting_value = cost_matrix[0][y_size - 1];
 
 	for(int x = 0; x < x_size; x++) {
 		if(cost_matrix[x][y_size - 1] < starting_value) {
@@ -232,17 +267,14 @@ void remove_seam(int& x_size, int& y_size, std::vector<std::vector<int> >& img_g
 
 	// trace the seam up from the bottom, record path
 	std::vector<int> vertical_seam;
-	vertical_seam.resize(y_size);
-	trace_seam(starting_position, y_size, vertical_seam, img_grid);
+	trace_seam(starting_position, y_size - 1, x_size, vertical_seam, cost_matrix, energy_table);
 
 	// remove seam and resize
 	for(int y = 0; y < y_size; y++) {
-		for(int x = vertical_seam[y]; x < x_size; x++) {
-			img_grid[x][y] = img_grid[x+1][y];
+		for(int x = vertical_seam[y]; x < x_size - 1; x++) {
+			img_grid[x][y_size - 1 - y] = img_grid[x + 1][y_size - 1 - y];
 		}
-		img_grid[x_size - 1][y] = -1;
 	}
 
 	x_size = x_size - 1;
-	y_size = y_size - 1;
 }
